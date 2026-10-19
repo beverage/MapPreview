@@ -21,6 +21,37 @@ public static class MapPreviewAPI
     internal static PatchGroup GenLowPatchGroup;
     internal static PatchGroup GenPatchGroup;
 
+    static MapPreviewAPI()
+    {
+        #if RW_1_6_OR_GREATER
+
+        // On the .NET runtime of RimWorld 1.7, small methods such as Rand.Value get inlined into their callers,
+        // and a caller compiled before the Gen patches are applied would bypass them during preview generation.
+        // Applying the patches once here, while Lunar bootstraps and before any defs are loaded, keeps their
+        // targets from being inlined later on, which still holds after the patches are removed again.
+        if (LunarAPI != null && Environment.Version.Major >= 5)
+        {
+            try
+            {
+                GenLowPatchGroup = LunarAPI.RootPatchGroup.NewSubGroup("GenLow");
+                GenLowPatchGroup.AddPatches(typeof(MapPreviewAPI).Assembly);
+
+                GenPatchGroup = LunarAPI.RootPatchGroup.NewSubGroup("Gen");
+                GenPatchGroup.AddPatches(typeof(MapPreviewAPI).Assembly);
+
+                var subscriber = new PatchGroupSubscriber(typeof(MapPreviewAPI));
+                SubscribeGenPatches(subscriber);
+                UnsubscribeGenPatches(subscriber);
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Failed to prepare map generation patches", e);
+            }
+        }
+
+        #endif
+    }
+
     private static void Init()
     {
         MainPatchGroup ??= LunarAPI.RootPatchGroup.NewSubGroup("Main");
